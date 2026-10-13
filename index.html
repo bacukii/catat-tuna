@@ -61,7 +61,7 @@
         <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 grid grid-cols-2 gap-3">
             <div>
                 <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Nama Kapal</label>
-                <input type="text" id="shipName" placeholder="Contoh: KM Bahari" class="w-full border-b-2 border-gray-200 focus:border-blue-500 outline-none py-1 text-sm font-bold text-gray-700">
+                <input type="text" id="shipName" style="text-transform: uppercase;" placeholder="Contoh: KM. Sidomulyo" class="w-full border-b-2 border-gray-200 focus:border-blue-500 outline-none py-1 text-sm font-bold text-gray-700">
             </div>
             <div>
                 <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tanggal</label>
@@ -197,7 +197,13 @@
         shipInput.value = localStorage.getItem(SHIP_KEY) || '';
         dateInput.value = localStorage.getItem(DATE_KEY) || new Date().toISOString().split('T')[0];
 
-        shipInput.addEventListener('input', () => localStorage.setItem(SHIP_KEY, shipInput.value));
+        shipInput.addEventListener('input', (e) => {
+              const uppercaseValue = e.target.value.toUpperCase();
+              e.target.value = uppercaseValue; // Memaksa input tetap kapital saat diketik
+              localStorage.setItem(SHIP_KEY, uppercaseValue); // Menyimpan format kapital ke memori
+        });
+
+        })
         dateInput.addEventListener('input', () => localStorage.setItem(DATE_KEY, dateInput.value));
 
         function saveData() {
