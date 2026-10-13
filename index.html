@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Catat Tuna</title>
+    <!-- Tailwind & FontAwesome -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- SheetJS untuk Export ke .xlsx -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1d4ed8">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+    <style>
+        body { background-color: #f3f4f6; overscroll-behavior-y: none; }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        @keyframes flash { 0% { background-color: #dbeafe; } 100% { background-color: transparent; } }
+        .flash-row { animation: flash 1s ease-out; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased flex flex-col h-screen">
+
+    <!-- Header -->
+    <header class="bg-blue-700 text-white p-3 shadow-md sticky top-0 z-10 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+            <i class="fas fa-fish text-xl"></i>
+            <h1 class="text-xl font-bold tracking-wide">Catat Tuna</h1>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="sendWA()" class="bg-green-500 hover:bg-green-600 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                <i class="fab fa-whatsapp text-sm"></i> Kirim WA
+            </button>
+            <button onclick="exportToExcel()" class="bg-emerald-500 hover:bg-emerald-600 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                <i class="fas fa-file-excel text-sm"></i> Export
+            </button>
+        </div>
+    </header>
+
+    <!-- Navigasi Mode (Kapal / Titipan) -->
+    <div class="bg-blue-800 px-4 py-2 flex justify-center gap-2 shadow-inner">
+        <button onclick="switchMode('kapal')" id="btnModeKapal" class="flex-1 py-1.5 px-4 rounded-lg text-xs font-bold transition bg-white text-blue-900 shadow">
+            <i class="fas fa-ship mr-1.5"></i> Mode Kapal (Utama)
+        </button>
+        <button onclick="switchMode('titipan')" id="btnModeTitipan" class="flex-1 py-1.5 px-4 rounded-lg text-xs font-bold transition bg-blue-900/60 text-blue-200">
+            <i class="fas fa-box-open mr-1.5"></i> Mode Ikan Titipan
+        </button>
+    </div>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto p-4 flex flex-col gap-4 pb-36">
+        <!-- Info Sesi -->
+        <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 grid grid-cols-2 gap-3">
+            <div>
+                <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Nama Kapal</label>
+                <input type="text" id="shipName" placeholder="Contoh: KM Bahari" class="w-full border-b-2 border-gray-200 focus:border-blue-500 outline-none py-1 text-sm font-bold text-gray-700">
+            </div>
+            <div>
+                <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tanggal</label>
+                <input type="date" id="dateInput" class="w-full border-b-2 border-gray-200 focus:border-blue-500 outline-none py-1 text-sm font-bold text-gray-700">
+            </div>
+        </div>
+
+        <!-- Khusus Panel Mode Titipan -->
+        <div id="titipanControlPanel" class="bg-amber-50 border border-amber-200 p-3 rounded-xl hidden flex-col gap-2.5 shadow-sm">
+            <div class="flex justify-between items-center">
+                <label class="text-xs font-bold text-amber-800 flex items-center gap-1.5">
+                    <i class="fas fa-user-tag"></i> Data Kepemilikan (Kosong = Kapal):
+                </label>
+                <label class="flex items-center gap-1.5 text-xs font-semibold text-amber-900 cursor-pointer bg-amber-200/60 px-2 py-0.5 rounded-md">
+                    <input type="checkbox" id="lockPemilik" class="rounded text-amber-600 focus:ring-amber-500"> Kunci
+                </label>
+            </div>
+            <div class="flex gap-2">
+                <input type="text" id="pemilikInput" placeholder="Nama ABK/Pemilik" class="w-3/5 bg-white border border-amber-300 rounded-lg px-3 py-2 text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-amber-400">
+                <input type="text" id="jenisInput" placeholder="Jenis (Kosong = Tuna)" class="w-2/5 bg-white border border-amber-300 rounded-lg px-3 py-2 text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-amber-400 placeholder:text-gray-400">
+            </div>
+        </div>
+
+        <!-- Dashboard -->
+        <div class="bg-gradient-to-br from-blue-600 to-blue-800 p-4 rounded-xl shadow-md text-white">
+            <div class="grid grid-cols-2 gap-4 mb-3">
+                <div class="bg-white/10 p-3 rounded-xl border border-white/20">
+                    <p class="text-[11px] font-semibold text-blue-100 mb-1" id="labelTotalEkor">TOTAL EKOR</p>
+                    <p class="text-3xl font-bold font-mono" id="totalCount">0</p>
+                </div>
+                <div class="bg-white/10 p-3 rounded-xl border border-white/20">
+                    <p class="text-[11px] font-semibold text-blue-100 mb-1">TOTAL BERAT (KG)</p>
+                    <p class="text-3xl font-bold font-mono" id="totalWeight">0.00</p>
+                </div>
+            </div>
+            <div class="text-xs bg-black/20 p-2.5 rounded-lg border border-white/10 flex justify-between items-center">
+                <span>Rata-rata: <strong id="avgWeight" class="text-sm font-mono text-amber-300">0.00</strong> kg/ekor</span>
+                <span id="subModeIndicator" class="text-[10px] text-blue-200 font-semibold uppercase tracking-wider">Mode: Rekap Utama</span>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col flex-1">
+            <div class="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <h2 class="font-bold text-gray-700 text-sm flex items-center gap-2"><i class="fas fa-list-ul text-blue-500"></i> <span id="tableTitle">Data Timbangan Kapal</span></h2>
+                <button onclick="askClearData()" class="text-red-500 text-xs font-bold hover:bg-red-50 px-2 py-1 rounded">Reset Mode Ini</button>
+            </div>
+            <div class="overflow-y-auto max-h-[35vh]">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-gray-50 sticky top-0 shadow-sm text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                        <tr id="tableHeaderRow">
+                            <th class="p-3 border-b w-12 text-center">NO</th>
+                            <th class="p-3 border-b">JAM</th>
+                            <th class="p-3 border-b text-right pr-6">BERAT (KG)</th>
+                            <th class="p-3 border-b w-20 text-center">AKSI</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Input Area -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-15px_30px_rgba(0,0,0,0.08)] z-20 pb-6">
+        <form id="inputForm" class="flex gap-3 max-w-lg mx-auto" onsubmit="addEntry(event)">
+            <div class="relative flex-1">
+                <input type="number" id="weightInput" step="0.01" inputmode="decimal" class="w-full text-3xl font-mono font-bold py-3 pl-5 pr-14 border-2 border-gray-300 rounded-xl focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none transition" placeholder="0.00" required autocomplete="off">
+                <span class="absolute right-5 top-1/2 -translate-y-1/2 font-bold text-gray-400">KG</span>
+            </div>
+            <button type="submit" class="bg-blue-600 active:bg-blue-800 text-white w-[72px] rounded-xl flex flex-col items-center justify-center shadow-lg transition-transform active:scale-90">
+                <i class="fas fa-plus text-xl mb-0.5"></i>
+                <span class="text-[10px] font-bold">TAMBAH</span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Modals -->
+    <div id="confirmModal" class="modal fixed inset-0 bg-black/50 z-50 items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-5">
+            <h3 class="font-bold text-lg mb-1" id="confirmTitle">Konfirmasi</h3>
+            <p class="text-gray-600 text-sm mb-5" id="confirmText">Apakah Anda yakin?</p>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeModal('confirmModal')" class="px-4 py-2 text-gray-600 font-bold bg-gray-100 rounded-lg text-sm">Batal</button>
+                <button id="confirmBtn" class="px-4 py-2 text-white font-bold bg-red-600 rounded-lg text-sm">Ya</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editModal" class="modal fixed inset-0 bg-black/50 z-50 items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-5">
+            <h3 class="font-bold text-lg mb-1">Edit Data Timbangan</h3>
+            <div id="editNameContainer" class="mb-3 hidden">
+                <label class="text-xs font-semibold text-gray-500">Pemilik & Jenis Ikan:</label>
+                <div class="flex gap-2 mt-1">
+                    <input type="text" id="editPemilikValue" placeholder="Pemilik" class="w-3/5 border border-gray-300 rounded-lg p-2 font-semibold text-sm outline-none">
+                    <input type="text" id="editJenisValue" placeholder="Jenis Ikan" class="w-2/5 border border-gray-300 rounded-lg p-2 font-semibold text-sm outline-none">
+                </div>
+            </div>
+            <p class="text-gray-600 text-sm mb-1">Berat baru (KG):</p>
+            <input type="number" id="editInputValue" step="0.01" inputmode="decimal" class="w-full border-2 border-blue-500 rounded-lg p-3 font-mono text-xl font-bold mb-5 outline-none">
+            <div class="flex justify-end gap-3">
+                <button onclick="closeModal('editModal')" class="px-4 py-2 text-gray-600 font-bold bg-gray-100 rounded-lg text-sm">Batal</button>
+                <button id="saveEditBtn" class="px-4 py-2 text-white font-bold bg-blue-600 rounded-lg text-sm">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let currentMode = 'kapal'; 
+        
+        const SHIP_KEY = 'catattuna_ship';
+        const DATE_KEY = 'catattuna_date';
+        const RECORDS_KAPAL_KEY = 'catattuna_records_kapal';
+        const RECORDS_TITIPAN_KEY = 'catattuna_records_titipan';
+
+        let recordsKapal = JSON.parse(localStorage.getItem(RECORDS_KAPAL_KEY)) || [];
+        let recordsTitipan = JSON.parse(localStorage.getItem(RECORDS_TITIPAN_KEY)) || [];
+
+        let currentNoKapal = recordsKapal.length > 0 ? Math.max(...recordsKapal.map(r => r.no)) + 1 : 1;
+        let currentNoTitipan = recordsTitipan.length > 0 ? Math.max(...recordsTitipan.map(r => r.no)) + 1 : 1;
+
+        // Elements
+        const shipInput = document.getElementById('shipName');
+        const dateInput = document.getElementById('dateInput');
+        const weightInput = document.getElementById('weightInput');
+        const pemilikInput = document.getElementById('pemilikInput');
+        const jenisInput = document.getElementById('jenisInput');
+        const lockPemilik = document.getElementById('lockPemilik');
+        
+        // Load Header Data
+        shipInput.value = localStorage.getItem(SHIP_KEY) || '';
+        dateInput.value = localStorage.getItem(DATE_KEY) || new Date().toISOString().split('T')[0];
+
+        shipInput.addEventListener('input', () => localStorage.setItem(SHIP_KEY, shipInput.value));
+        dateInput.addEventListener('input', () => localStorage.setItem(DATE_KEY, dateInput.value));
+
+        function saveData() {
+            localStorage.setItem(RECORDS_KAPAL_KEY, JSON.stringify(recordsKapal));
+            localStorage.setItem(RECORDS_TITIPAN_KEY, JSON.stringify(recordsTitipan));
+        }
+
+        const formatNum = (num) => Number(num).toFixed(2);
+        const formatTime = (date) => date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
+
+        function switchMode(mode) {
+            currentMode = mode;
+            const btnKapal = document.getElementById('btnModeKapal');
+            const btnTitipan = document.getElementById('btnModeTitipan');
+            const titipanPanel = document.getElementById('titipanControlPanel');
+            const indicator = document.getElementById('subModeIndicator');
+            const tableTitle = document.getElementById('tableTitle');
+
+            if(mode === 'kapal') {
+                btnKapal.className = "flex-1 py-1.5 px-4 rounded-lg text-xs font-bold transition bg-white text-blue-900 shadow";
+                btnTitipan.className = "flex-1 py-1.5 px-4 rounded-lg text-xs font-bold transition bg-blue-900/60 text-blue-200";
+                titipanPanel.classList.add('hidden');
+                indicator.innerText = "Mode: Rekap Utama Kapal";
+                tableTitle.innerText = "Data Timbangan Kapal";
+            } else {
+                btnTitipan.className = "flex-1 py-1.5 px-4 rounded-lg text-xs font-bold transition bg-amber-500 text-white shadow";
+                btnKapal.className = "flex-1 py-1.5 px-4 rounded-lg text-xs font-bold transition bg-blue-900/60 text-blue-200";
+                titipanPanel.classList.remove('hidden');
+                indicator.innerText = "Mode: Ikan Titipan";
+                tableTitle.innerText = "Data Ikan Titipan";
+            }
+            render();
+        }
+
+        function addEntry(e) {
+            e.preventDefault();
+            let val = parseFloat(weightInput.value.replace(',', '.'));
+            if(isNaN(val) || val <= 0) return;
+
+            let timeStr = formatTime(new Date());
+
+            if(currentMode === 'kapal') {
+                recordsKapal.unshift({ no: currentNoKapal++, weight: val, time: timeStr });
+            } else {
+                // Logika Pemilik Ikan (kosong = KAPAL)
+                let pemilik = pemilikInput.value.trim() || 'KAPAL';
+                // Logika Jenis Ikan (kosong = Tuna)
+                let jenisIkan = jenisInput.value.trim() || 'Tuna';
+                
+                recordsTitipan.unshift({ no: currentNoTitipan++, pemilik: pemilik, jenis: jenisIkan, weight: val, time: timeStr });
+                
+                if(!lockPemilik.checked) {
+                    pemilikInput.value = '';
+                    jenisInput.value = '';
+                }
+            }
+
+            saveData();
+            weightInput.value = '';
+            weightInput.focus();
+            render();
+        }
+
+        function render() {
+            const tbody = document.getElementById('tableBody');
+            const headerRow = document.getElementById('tableHeaderRow');
+            
+            if(currentMode === 'kapal') {
+                headerRow.innerHTML = `
+                    <th class="p-3 border-b w-12 text-center">NO</th>
+                    <th class="p-3 border-b">JAM</th>
+                    <th class="p-3 border-b text-right pr-6">BERAT (KG)</th>
+                    <th class="p-3 border-b w-20 text-center">AKSI</th>
+                `;
+                
+                if(recordsKapal.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400 text-xs">Belum ada data kapal.</td></tr>`;
+                } else {
+                    tbody.innerHTML = recordsKapal.map((r, index) => `
+                        <tr class="border-b border-gray-100 ${index === 0 ? 'flash-row' : ''}">
+                            <td class="p-3 text-center font-bold text-gray-400 text-xs">${r.no}</td>
+                            <td class="p-3 text-xs text-gray-500">${r.time}</td>
+                            <td class="p-3 font-mono font-bold text-base text-gray-800 text-right pr-6">${formatNum(r.weight)}</td>
+                            <td class="p-2 text-center flex justify-center gap-1">
+                                <button onclick="askEditKapal(${r.no}, ${r.weight})" class="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition"><i class="fas fa-edit"></i></button>
+                                <button onclick="askDeleteKapal(${r.no})" class="text-red-400 hover:bg-red-50 p-2 rounded-lg transition"><i class="fas fa-trash-alt"></i></button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            } else {
+                headerRow.innerHTML = `
+                    <th class="p-3 border-b w-10 text-center">NO</th>
+                    <th class="p-3 border-b">PEMILIK & JENIS</th>
+                    <th class="p-3 border-b text-right pr-4">BERAT</th>
+                    <th class="p-3 border-b w-16 text-center">AKSI</th>
+                `;
+
+                if(recordsTitipan.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400 text-xs">Belum ada data ikan titipan.</td></tr>`;
+                } else {
+                    tbody.innerHTML = recordsTitipan.map((r, index) => {
+                        let jenis = r.jenis || 'Tuna'; 
+                        let badgeColor = jenis.toLowerCase() === 'tuna' ? 'text-blue-600' : 'text-amber-600';
+                        return `
+                        <tr class="border-b border-gray-100 ${index === 0 ? 'flash-row' : ''}">
+                            <td class="p-3 text-center font-bold text-gray-400 text-xs">${r.no}</td>
+                            <td class="p-3 font-bold text-gray-800 text-xs">
+                                ${r.pemilik}
+                                <div class="text-[10px] text-gray-400 font-normal mt-0.5">
+                                    <span class="${badgeColor} font-bold">${jenis}</span> • ${r.time}
+                                </div>
+                            </td>
+                            <td class="p-3 font-mono font-bold text-sm text-gray-800 text-right pr-4">${formatNum(r.weight)}</td>
+                            <td class="p-2 text-center flex justify-center gap-1">
+                                <button onclick="askEditTitipan(${r.no}, '${r.pemilik}', '${jenis}', ${r.weight})" class="text-blue-500 hover:bg-blue-50 p-1.5 rounded-lg transition"><i class="fas fa-edit"></i></button>
+                                <button onclick="askDeleteTitipan(${r.no})" class="text-red-400 hover:bg-red-50 p-1.5 rounded-lg transition"><i class="fas fa-trash-alt"></i></button>
+                            </td>
+                        </tr>
+                    `}).join('');
+                }
+            }
+            updateDashboard();
+        }
+
+        function updateDashboard() {
+            const activeRecs = currentMode === 'kapal' ? recordsKapal : recordsTitipan;
+            const total = activeRecs.length;
+            const weight = activeRecs.reduce((sum, r) => sum + r.weight, 0);
+            document.getElementById('totalCount').innerText = total;
+            document.getElementById('totalWeight').innerText = formatNum(weight);
+            document.getElementById('avgWeight').innerText = total > 0 ? formatNum(weight/total) : '0.00';
+        }
+
+        // --- Modals Logic ---
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+        function openModal(id) { document.getElementById(id).classList.add('active'); }
+
+        let actionTarget = null;
+
+        function askDeleteKapal(no) {
+            actionTarget = no;
+            document.getElementById('confirmTitle').innerText = 'Hapus Data Kapal';
+            document.getElementById('confirmText').innerText = `Hapus data No.${no}?`;
+            document.getElementById('confirmBtn').onclick = () => {
+                recordsKapal = recordsKapal.filter(r => r.no !== actionTarget);
+                saveData(); render(); closeModal('confirmModal');
+            };
+            openModal('confirmModal');
+        }
+
+        function askDeleteTitipan(no) {
+            actionTarget = no;
+            document.getElementById('confirmTitle').innerText = 'Hapus Data Titipan';
+            document.getElementById('confirmText').innerText = `Hapus catatan titipan No.${no}?`;
+            document.getElementById('confirmBtn').onclick = () => {
+                recordsTitipan = recordsTitipan.filter(r => r.no !== actionTarget);
+                saveData(); render(); closeModal('confirmModal');
+            };
+            openModal('confirmModal');
+        }
+
+        function askEditKapal(no, currentWeight) {
+            actionTarget = no;
+            document.getElementById('editNameContainer').classList.add('hidden');
+            const input = document.getElementById('editInputValue');
+            input.value = currentWeight;
+            document.getElementById('saveEditBtn').onclick = () => {
+                let newVal = parseFloat(input.value.replace(',', '.'));
+                if(!isNaN(newVal) && newVal > 0) {
+                    let idx = recordsKapal.findIndex(r => r.no === actionTarget);
+                    if(idx !== -1) { recordsKapal[idx].weight = newVal; saveData(); render(); }
+                }
+                closeModal('editModal');
+            };
+            openModal('editModal');
+            setTimeout(() => input.focus(), 100);
+        }
+
+        function askEditTitipan(no, currentPemilik, currentJenis, currentWeight) {
+            actionTarget = no;
+            document.getElementById('editNameContainer').classList.remove('hidden');
+            const pemilikEditInput = document.getElementById('editPemilikValue');
+            const jenisEditInput = document.getElementById('editJenisValue');
+            const weightInputModal = document.getElementById('editInputValue');
+            
+            pemilikEditInput.value = currentPemilik;
+            jenisEditInput.value = currentJenis;
+            weightInputModal.value = currentWeight;
+
+            document.getElementById('saveEditBtn').onclick = () => {
+                let newPemilik = pemilikEditInput.value.trim() || 'KAPAL';
+                let newJenis = jenisEditInput.value.trim() || 'Tuna';
+                let newVal = parseFloat(weightInputModal.value.replace(',', '.'));
+                
+                if(!isNaN(newVal) && newVal > 0) {
+                    let idx = recordsTitipan.findIndex(r => r.no === actionTarget);
+                    if(idx !== -1) { 
+                        recordsTitipan[idx].pemilik = newPemilik; 
+                        recordsTitipan[idx].jenis = newJenis;
+                        recordsTitipan[idx].weight = newVal; 
+                        saveData(); render(); 
+                    }
+                }
+                closeModal('editModal');
+            };
+            openModal('editModal');
+            setTimeout(() => pemilikEditInput.focus(), 100);
+        }
+
+        function askClearData() {
+            const name = currentMode === 'kapal' ? 'Data Kapal' : 'Data Titipan';
+            document.getElementById('confirmTitle').innerText = `Reset ${name}`;
+            document.getElementById('confirmText').innerText = `Yakin ingin menghapus SEMUA ${name.toLowerCase()} ini?`;
+            document.getElementById('confirmBtn').onclick = () => {
+                if(currentMode === 'kapal') { recordsKapal = []; currentNoKapal = 1; }
+                else { recordsTitipan = []; currentNoTitipan = 1; }
+                saveData(); render(); closeModal('confirmModal');
+            };
+            openModal('confirmModal');
+        }
+
+        // --- Exports & WA ---
+        function sendWA() {
+            const ship = shipInput.value || '-';
+            if(currentMode === 'kapal') {
+                if(recordsKapal.length === 0) return alert('Data kapal kosong!');
+                const totW = formatNum(recordsKapal.reduce((s, r) => s + r.weight, 0));
+                const text = `*LAPORAN BONGKAR TUNA*\n\nNama Kapal : ${ship}\nTanggal : ${dateInput.value}\nTotal Ekor : ${recordsKapal.length}\nTotal Berat : ${totW} KG`;
+                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+            } else {
+                if(recordsTitipan.length === 0) return alert('Data Titipan kosong!');
+                
+                // Grouping berdasarkan Pemilik lalu Jenis Ikan
+                let summary = {};
+                recordsTitipan.forEach(r => {
+                    let jenis = r.jenis || 'Tuna';
+                    if(!summary[r.pemilik]) summary[r.pemilik] = {};
+                    if(!summary[r.pemilik][jenis]) summary[r.pemilik][jenis] = { count: 0, weight: 0 };
+                    
+                    summary[r.pemilik][jenis].count += 1;
+                    summary[r.pemilik][jenis].weight += r.weight;
+                });
+
+                let text = `*REKAP IKAN TITIPAN*\nNama Kapal : ${ship}\nTanggal : ${dateInput.value}\n\n`;
+                
+                for(let name in summary) {
+                    text += `👤 *${name}*\n`;
+                    for(let jenis in summary[name]) {
+                        text += `  - ${jenis}: ${summary[name][jenis].count} ekor (${formatNum(summary[name][jenis].weight)} kg)\n`;
+                    }
+                }
+                
+                const totW = formatNum(recordsTitipan.reduce((s, r) => s + r.weight, 0));
+                text += `\n*Total Keseluruhan : ${recordsTitipan.length} ekor (${totW} kg)*`;
+                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+            }
+        }
+
+        function exportToExcel() {
+            const ship = shipInput.value.replace(/[^a-zA-Z0-9]/g, '_') || 'Tanpa_Nama';
+            const wb = XLSX.utils.book_new();
+
+            if(currentMode === 'kapal') {
+                if(recordsKapal.length === 0) return alert('Data kapal kosong!');
+                const wsData = [
+                    ["NAMA KAPAL", shipInput.value || '-'],
+                    ["TANGGAL", dateInput.value],
+                    ["TOTAL EKOR", recordsKapal.length],
+                    ["TOTAL KG", recordsKapal.reduce((sum, r) => sum + r.weight, 0)],
+                    [],
+                    ["NO", "JAM", "BERAT (KG)"]
+                ];
+                [...recordsKapal].sort((a,b)=>a.no-b.no).forEach(r => {
+                    wsData.push([r.no, r.time, r.weight]);
+                });
+                const ws = XLSX.utils.aoa_to_sheet(wsData);
+                XLSX.utils.book_append_sheet(wb, ws, "Rekap Kapal");
+                XLSX.writeFile(wb, `Tuna_Kapal_${ship}.xlsx`);
+            } else {
+                if(recordsTitipan.length === 0) return alert('Data Titipan kosong!');
+                const wsData = [
+                    ["REKAP IKAN TITIPAN"],
+                    ["NAMA KAPAL", shipInput.value || '-'],
+                    ["TANGGAL", dateInput.value],
+                    [],
+                    ["NO", "PEMILIK", "JENIS IKAN", "JAM", "BERAT (KG)"]
+                ];
+                [...recordsTitipan].sort((a,b)=>a.no-b.no).forEach(r => {
+                    let jenis = r.jenis || 'Tuna';
+                    wsData.push([r.no, r.pemilik, jenis, r.time, r.weight]);
+                });
+                const ws = XLSX.utils.aoa_to_sheet(wsData);
+                XLSX.utils.book_append_sheet(wb, ws, "Ikan Titipan");
+                XLSX.writeFile(wb, `Ikan_Titipan_${ship}.xlsx`);
+            }
+        }
+
+        render();
+    </script>
+</body>
+</html>
