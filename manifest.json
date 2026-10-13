@@ -1,7 +1,7 @@
 {
   "name": "Catat Tuna",
   "short_name": "CatatTuna",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#1d4ed8",
   "theme_color": "#1d4ed8",
