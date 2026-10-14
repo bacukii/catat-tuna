@@ -1,4 +1,4 @@
-const CACHE_NAME = 'catat-tuna-v2';
+const CACHE_NAME = 'catat-tuna-v3';
 
 // Daftarkan link CDN dan aset aslimu di sini
 const ASSETS_TO_CACHE = [
