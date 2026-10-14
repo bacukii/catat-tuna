@@ -29,13 +29,15 @@
 </head>
 <body class="text-gray-800 antialiased flex flex-col h-screen">
 
-    <!-- Header -->
+		    <!-- Header -->
     <header class="bg-blue-700 text-white p-3 shadow-md sticky top-0 z-10 flex justify-between items-center">
         <div class="flex items-center gap-2">
-            <i class="fas fa-fish text-xl"></i>
-            <h1 class="text-xl font-bold tracking-wide">Catat Tuna</h1>
+            <i class="fas fa-fish text-2xl"></i>
+            <div class="flex flex-col">
+                <h1 class="text-xl font-bold tracking-wide leading-none">Catat Tuna</h1>
+                <span class="text-[9px] text-blue-300 font-medium tracking-widest mt-1 uppercase">By Mitchell</span>
+            </div>
         </div>
-        <div class="flex gap-2">
             <button onclick="sendWA()" class="bg-green-500 hover:bg-green-600 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
                 <i class="fab fa-whatsapp text-sm"></i> Kirim WA
             </button>
