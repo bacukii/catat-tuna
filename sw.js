@@ -1,12 +1,13 @@
-const CACHE_NAME = 'catat-tuna-v3';
+const CACHE_NAME = 'catat-tuna-v4'; // Naikkan versi cache
 
-// Daftarkan link CDN dan aset aslimu di sini
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
   'https://cdn.tailwindcss.com',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css',
+  // WAJIB: Pre-cache file font agar ikon tetap tampil utuh saat offline murni
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/webfonts/fa-solid-900.woff2',
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   'https://cdn-icons-png.flaticon.com/512/3050/3050525.png'
 ];
