@@ -1,4 +1,4 @@
-const CACHE_NAME = 'catat-tuna-v4'; // Naikkan versi cache
+const CACHE_NAME = 'catat-tuna-v5'; // Naikkan versi cache
 
 const ASSETS_TO_CACHE = [
   './',
@@ -9,6 +9,7 @@ const ASSETS_TO_CACHE = [
   // WAJIB: Pre-cache file font agar ikon tetap tampil utuh saat offline murni
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/webfonts/fa-solid-900.woff2',
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
   'https://cdn-icons-png.flaticon.com/512/3050/3050525.png'
 ];
 

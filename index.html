@@ -9,6 +9,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <!-- SheetJS untuk Export ke .xlsx -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+		<!-- Supabase SDK -->
+		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#1d4ed8">
@@ -53,6 +55,10 @@
                 <i class="fas fa-file-excel text-sm"></i> Export
             </button>
         </div>
+				<button onclick="syncToSupabase()" class="bg-indigo-500 hover:bg-indigo-600 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+					<i class="fas fa-cloud-upload-alt text-sm"></i> Sync Cloud
+				</button>
+
     </header>
 
     <!-- Navigasi Mode (Kapal / Titipan) -->
@@ -181,6 +187,67 @@
     </div>
 
     <script>
+				// 1. Inisialisasi Supabase (Ganti URL dan KEY dengan milikmu)
+const supabaseUrl = 'https://stydpkjwnuyjbccmgciq.supabase.co';
+const supabaseKey = 'sb_publishable_YdFXJ6Rsi_NFHz61HsM2Ow_pqz6R5XT';
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+// 2. Fungsi untuk Sync ke DB
+async function syncToSupabase() {
+    if (recordsKapal.length === 0 && recordsTitipan.length === 0) {
+        return alert('Tidak ada data untuk disinkronisasi!');
+    }
+
+    try {
+        // A. Buat Sesi Bongkar dulu untuk dapat ID
+        const { data: sesi, error: errSesi } = await supabase
+            .from('sesi_bongkar')
+            .insert([{ 
+                nama_kapal: shipInput.value || 'Tanpa Nama', 
+                tanggal: dateInput.value 
+            }])
+            .select()
+            .single();
+
+        if (errSesi) throw errSesi;
+
+        // B. Kumpulkan semua rincian ke dalam satu Array Payload
+        let payload = [];
+        
+        recordsKapal.forEach(r => {
+            payload.push({
+                sesi_id: sesi.id,
+                mode: 'kapal',
+                no_urut: r.no,
+                berat_kg: r.weight,
+                jam: r.time
+            });
+        });
+
+        recordsTitipan.forEach(r => {
+            payload.push({
+                sesi_id: sesi.id,
+                mode: 'titipan',
+                no_urut: r.no,
+                pemilik: r.pemilik,
+                jenis_ikan: r.jenis || 'Tuna',
+                berat_kg: r.weight,
+                jam: r.time
+            });
+        });
+
+        // C. Tembak semua rincian ke tabel detail_timbangan sekaligus
+        const { error: errDetail } = await supabase.from('detail_timbangan').insert(payload);
+        if (errDetail) throw errDetail;
+
+        alert('Sukses! Data bongkaran berhasil di-backup ke Supabase.');
+    } catch (error) {
+        console.error('Error Sync:', error);
+        alert('Gagal sync ke cloud. Cek koneksi internetmu!');
+    }
+}
+
+
         // State Management
         let currentMode = 'kapal'; 
         
