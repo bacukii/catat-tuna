@@ -9,8 +9,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <!-- SheetJS untuk Export ke .xlsx -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-		<!-- Supabase SDK -->
-		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#1d4ed8">
@@ -20,9 +20,19 @@
     
     <script>
         if ('serviceWorker' in navigator) {
-            // Gunakan event load agar halaman utama render lebih dulu
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
+                    .then((reg) => {
+                        reg.onupdatefound = () => {
+                            const installingWorker = reg.installing;
+                            installingWorker.onstatechange = () => {
+                                if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    alert('Update aplikasi tersedia! Halaman akan dimuat ulang.');
+                                    window.location.reload();
+                                }
+                            };
+                        };
+                    })
                     .catch(err => console.error('SW Failed:', err));
             });
         }
@@ -39,30 +49,28 @@
 </head>
 <body class="text-gray-800 antialiased flex flex-col h-screen">
 
-		<!-- Header -->
-<header class="bg-blue-700 text-white p-3 shadow-md sticky top-0 z-10 flex justify-between items-center">
-    <div class="flex items-center gap-2">
-        <i class="fas fa-fish text-2xl"></i>
-        <div class="flex flex-col">
-            <h1 class="text-xl font-bold tracking-wide leading-none">Catat Tuna</h1>
-            <span class="text-[9px] text-blue-300 font-medium tracking-widest mt-1 uppercase">By Mitchell</span>
+    <!-- Header -->
+    <header class="bg-blue-700 text-white p-3 shadow-md sticky top-0 z-10 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+            <i class="fas fa-fish text-2xl"></i>
+            <div class="flex flex-col">
+                <h1 class="text-xl font-bold tracking-wide leading-none">Catat Tuna</h1>
+                <span class="text-[9px] text-blue-300 font-medium tracking-widest mt-1 uppercase">By Mitchell</span>
+            </div>
         </div>
-    </div>
-    
-    <!-- Wrapper baru untuk menyatukan semua tombol di kanan -->
-    <div class="flex items-center gap-2">
-        <button onclick="sendWA()" class="bg-green-500 hover:bg-green-600 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-            <i class="fab fa-whatsapp text-sm"></i> Kirim WA
-        </button>
-        <button onclick="exportToExcel()" class="bg-emerald-500 hover:bg-emerald-600 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-            <i class="fas fa-file-excel text-sm"></i> Export
-        </button>
-        <button onclick="syncToSupabase()" class="bg-indigo-500 hover:bg-indigo-600 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-            <i class="fas fa-cloud-upload-alt text-sm"></i> Sync
-        </button>
-    </div>
-</header>
-
+        
+        <div class="flex items-center gap-2">
+            <button onclick="sendWA()" class="bg-green-500 hover:bg-green-600 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                <i class="fab fa-whatsapp text-sm"></i> Kirim WA
+            </button>
+            <button onclick="exportToExcel()" class="bg-emerald-500 hover:bg-emerald-600 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                <i class="fas fa-file-excel text-sm"></i> Export
+            </button>
+            <button onclick="syncToSupabase()" class="bg-indigo-500 hover:bg-indigo-600 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                <i class="fas fa-cloud-upload-alt text-sm"></i> Sync
+            </button>
+        </div>
+    </header>
 
     <!-- Navigasi Mode (Kapal / Titipan) -->
     <div class="bg-blue-800 px-4 py-2 flex justify-center gap-2 shadow-inner">
@@ -190,81 +198,78 @@
     </div>
 
     <script>
-// 1. Inisialisasi Supabase (Lebih Aman untuk Offline)
-const supabaseUrl = 'https://stydpkjwnuyjbccmgciq.supabase.co';
-const supabaseKey = 'sb_publishable_YdFXJ6Rsi_NFHz61HsM2Ow_pqz6R5XT';
-let supabase = null;
+        // 1. Inisialisasi Supabase yang Aman dari Crash Offline
+        const supabaseUrl = 'https://stydpkjwnuyjbccmgciq.supabase.co';
+        const supabaseKey = 'sb_publishable_YdFXJ6Rsi_NFHz61HsM2Ow_pqz6R5XT';
+        let supabase = null;
 
-// Cek apakah script SDK Supabase berhasil dimuat
-if (typeof window.supabase !== 'undefined') {
-    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-} else {
-    console.warn('Supabase SDK tidak termuat. Berjalan di mode full offline.');
-}
+        try {
+            if (typeof window.supabase !== 'undefined') {
+                supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+            } else {
+                console.warn('Supabase SDK tidak termuat. Berjalan di mode offline.');
+            }
+        } catch (error) {
+            console.error('Gagal inisialisasi Supabase:', error);
+        }
 
-// 2. Fungsi untuk Sync ke DB
-async function syncToSupabase() {
-    // Cegah error jika tombol ditekan saat offline
-    if (!supabase) {
-        return alert('Gagal sinkronisasi! Koneksi terputus atau library Cloud gagal dimuat saat aplikasi dibuka.');
-    }
+        // 2. Fungsi untuk Sync ke DB
+        async function syncToSupabase() {
+            if (!supabase) {
+                return alert('Gagal sinkronisasi! Koneksi terputus atau library Cloud gagal dimuat saat aplikasi dibuka.');
+            }
+            if (recordsKapal.length === 0 && recordsTitipan.length === 0) {
+                return alert('Tidak ada data untuk disinkronisasi!');
+            }
 
-    if (recordsKapal.length === 0 && recordsTitipan.length === 0) {
-        return alert('Tidak ada data untuk disinkronisasi!');
-    }
-    
-    // ... [kode try-catch Supabase milikmu tetap sama] ...
+            try {
+                // A. Buat Sesi Bongkar dulu untuk dapat ID
+                const { data: sesi, error: errSesi } = await supabase
+                    .from('sesi_bongkar')
+                    .insert([{ 
+                        nama_kapal: shipInput.value || 'Tanpa Nama', 
+                        tanggal: dateInput.value 
+                    }])
+                    .select()
+                    .single();
 
+                if (errSesi) throw errSesi;
 
-    try {
-        // A. Buat Sesi Bongkar dulu untuk dapat ID
-        const { data: sesi, error: errSesi } = await supabase
-            .from('sesi_bongkar')
-            .insert([{ 
-                nama_kapal: shipInput.value || 'Tanpa Nama', 
-                tanggal: dateInput.value 
-            }])
-            .select()
-            .single();
+                // B. Kumpulkan semua rincian ke dalam satu Array Payload
+                let payload = [];
+                
+                recordsKapal.forEach(r => {
+                    payload.push({
+                        sesi_id: sesi.id,
+                        mode: 'kapal',
+                        no_urut: r.no,
+                        berat_kg: r.weight,
+                        jam: r.time
+                    });
+                });
 
-        if (errSesi) throw errSesi;
+                recordsTitipan.forEach(r => {
+                    payload.push({
+                        sesi_id: sesi.id,
+                        mode: 'titipan',
+                        no_urut: r.no,
+                        pemilik: r.pemilik,
+                        jenis_ikan: r.jenis || 'Tuna',
+                        berat_kg: r.weight,
+                        jam: r.time
+                    });
+                });
 
-        // B. Kumpulkan semua rincian ke dalam satu Array Payload
-        let payload = [];
-        
-        recordsKapal.forEach(r => {
-            payload.push({
-                sesi_id: sesi.id,
-                mode: 'kapal',
-                no_urut: r.no,
-                berat_kg: r.weight,
-                jam: r.time
-            });
-        });
+                // C. Tembak semua rincian ke tabel detail_timbangan sekaligus
+                const { error: errDetail } = await supabase.from('detail_timbangan').insert(payload);
+                if (errDetail) throw errDetail;
 
-        recordsTitipan.forEach(r => {
-            payload.push({
-                sesi_id: sesi.id,
-                mode: 'titipan',
-                no_urut: r.no,
-                pemilik: r.pemilik,
-                jenis_ikan: r.jenis || 'Tuna',
-                berat_kg: r.weight,
-                jam: r.time
-            });
-        });
-
-        // C. Tembak semua rincian ke tabel detail_timbangan sekaligus
-        const { error: errDetail } = await supabase.from('detail_timbangan').insert(payload);
-        if (errDetail) throw errDetail;
-
-        alert('Sukses! Data bongkaran berhasil di-backup ke Supabase.');
-    } catch (error) {
-        console.error('Error Sync:', error);
-        alert('Gagal sync ke cloud. Cek koneksi internetmu!');
-    }
-}
-
+                alert('Sukses! Data bongkaran berhasil di-backup ke Supabase.');
+            } catch (error) {
+                console.error('Error Sync:', error);
+                alert('Gagal sync ke cloud. Cek koneksi internetmu!');
+            }
+        }
 
         // State Management
         let currentMode = 'kapal'; 
@@ -294,8 +299,8 @@ async function syncToSupabase() {
 
         shipInput.addEventListener('input', (e) => {
               const uppercaseValue = e.target.value.toUpperCase();
-              e.target.value = uppercaseValue; // Memaksa input tetap kapital saat diketik
-              localStorage.setItem(SHIP_KEY, uppercaseValue); // Menyimpan format kapital ke memori
+              e.target.value = uppercaseValue;
+              localStorage.setItem(SHIP_KEY, uppercaseValue);
         });
 
         dateInput.addEventListener('input', () => localStorage.setItem(DATE_KEY, dateInput.value));
@@ -342,9 +347,7 @@ async function syncToSupabase() {
             if(currentMode === 'kapal') {
                 recordsKapal.unshift({ no: currentNoKapal++, weight: val, time: timeStr });
             } else {
-                // Logika Pemilik Ikan (kosong = KAPAL)
                 let pemilik = pemilikInput.value.trim() || 'KAPAL';
-                // Logika Jenis Ikan (kosong = Tuna)
                 let jenisIkan = jenisInput.value.trim() || 'Tuna';
                 
                 recordsTitipan.unshift({ no: currentNoTitipan++, pemilik: pemilik, jenis: jenisIkan, weight: val, time: timeStr });
@@ -531,7 +534,6 @@ async function syncToSupabase() {
             } else {
                 if(recordsTitipan.length === 0) return alert('Data Titipan kosong!');
                 
-                // Grouping berdasarkan Pemilik lalu Jenis Ikan
                 let summary = {};
                 recordsTitipan.forEach(r => {
                     let jenis = r.jenis || 'Tuna';
