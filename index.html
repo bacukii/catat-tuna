@@ -9,7 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <!-- SheetJS untuk Export ke .xlsx -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- Supabase SDK (Versi Spesifik, Tanpa Redirect yang Bikin PWA Crash) -->
+    <!-- Supabase SDK (Aman dari Crash Offline) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.46.1/dist/umd/supabase.min.js"></script>
     <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
@@ -47,7 +47,7 @@
 </head>
 <body class="text-gray-800 antialiased flex flex-col h-screen">
 
-    <!-- Header (Diperbarui Khusus Mobile: Tombol Teks Diringkas Jadi Ikon) -->
+    <!-- Header Mobile Optimized -->
     <header class="bg-blue-700 text-white p-3 shadow-md sticky top-0 z-10 flex justify-between items-center">
         <div class="flex items-center gap-2">
             <i class="fas fa-fish text-2xl"></i>
@@ -70,7 +70,7 @@
         </div>
     </header>
 
-    <!-- Navigasi Mode (Kapal / Titipan) -->
+    <!-- Navigasi Mode -->
     <div class="bg-blue-800 px-4 py-2 flex justify-center gap-2 shadow-inner">
         <button onclick="switchMode('kapal')" id="btnModeKapal" class="flex-1 py-1.5 px-4 rounded-lg text-xs font-bold transition bg-white text-blue-900 shadow">
             <i class="fas fa-ship mr-1.5"></i> Mode Kapal (Utama)
@@ -196,7 +196,16 @@
     </div>
 
     <script>
-        // Inisialisasi Supabase
+        // --- SECURITY PATCH: Utilitas Anti-XSS ---
+        // Mengamankan input teks sebelum di-render ke HTML untuk mencegah eksekusi script berbahaya
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.toString().replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        // --- Inisialisasi Supabase ---
         const supabaseUrl = 'https://stydpkjwnuyjbccmgciq.supabase.co';
         const supabaseKey = 'sb_publishable_YdFXJ6Rsi_NFHz61HsM2Ow_pqz6R5XT';
         let supabase = null;
@@ -209,26 +218,45 @@
             console.error('Supabase terputus:', error);
         }
 
+        let currentSesiId = localStorage.getItem('catattuna_sesi_id') || null;
+
         async function syncToSupabase() {
             if (!supabase) return alert('Koneksi terputus atau gagal memuat Cloud saat dibuka.');
-            if (recordsKapal.length === 0 && recordsTitipan.length === 0) return alert('Data kosong!');
+            
+            let unsyncedKapal = recordsKapal.filter(r => !r.synced);
+            let unsyncedTitipan = recordsTitipan.filter(r => !r.synced);
+
+            if (unsyncedKapal.length === 0 && unsyncedTitipan.length === 0) {
+                return alert('Semua data sudah aman tersinkronisasi di Cloud!');
+            }
 
             try {
-                const { data: sesi, error: errSesi } = await supabase.from('sesi_bongkar').insert([{ 
-                    nama_kapal: shipInput.value || 'Tanpa Nama', 
-                    tanggal: dateInput.value 
-                }]).select().single();
+                if (!currentSesiId) {
+                    const { data: sesi, error: errSesi } = await supabase.from('sesi_bongkar').insert([{ 
+                        nama_kapal: escapeHTML(shipInput.value) || 'Tanpa Nama', 
+                        tanggal: dateInput.value 
+                    }]).select().single();
 
-                if (errSesi) throw errSesi;
+                    if (errSesi) throw errSesi;
+                    currentSesiId = sesi.id;
+                    localStorage.setItem('catattuna_sesi_id', currentSesiId);
+                }
 
                 let payload = [];
-                recordsKapal.forEach(r => payload.push({ sesi_id: sesi.id, mode: 'kapal', no_urut: r.no, berat_kg: r.weight, jam: r.time }));
-                recordsTitipan.forEach(r => payload.push({ sesi_id: sesi.id, mode: 'titipan', no_urut: r.no, pemilik: r.pemilik, jenis_ikan: r.jenis || 'Tuna', berat_kg: r.weight, jam: r.time }));
+                unsyncedKapal.forEach(r => payload.push({ sesi_id: currentSesiId, mode: 'kapal', no_urut: r.no, berat_kg: r.weight, jam: r.time }));
+                unsyncedTitipan.forEach(r => payload.push({ sesi_id: currentSesiId, mode: 'titipan', no_urut: r.no, pemilik: escapeHTML(r.pemilik), jenis_ikan: escapeHTML(r.jenis) || 'Tuna', berat_kg: r.weight, jam: r.time }));
 
                 const { error: errDetail } = await supabase.from('detail_timbangan').insert(payload);
                 if (errDetail) throw errDetail;
-                alert('Sukses backup ke Supabase!');
+                
+                recordsKapal.forEach(r => r.synced = true);
+                recordsTitipan.forEach(r => r.synced = true);
+                saveData();
+                render();
+
+                alert(`Sukses! ${payload.length} data timbangan baru berhasil di-backup ke Supabase.`);
             } catch (error) {
+                console.error(error);
                 alert('Gagal sync. Cek koneksi internet!');
             }
         }
@@ -299,11 +327,11 @@
             let timeStr = formatTime(new Date());
 
             if(currentMode === 'kapal') {
-                recordsKapal.unshift({ no: currentNoKapal++, weight: val, time: timeStr });
+                recordsKapal.unshift({ no: currentNoKapal++, weight: val, time: timeStr, synced: false });
             } else {
                 let pemilik = pemilikInput.value.trim() || 'KAPAL';
                 let jenisIkan = jenisInput.value.trim() || 'Tuna';
-                recordsTitipan.unshift({ no: currentNoTitipan++, pemilik: pemilik, jenis: jenisIkan, weight: val, time: timeStr });
+                recordsTitipan.unshift({ no: currentNoTitipan++, pemilik: pemilik, jenis: jenisIkan, weight: val, time: timeStr, synced: false });
                 if(!lockPemilik.checked) { pemilikInput.value = ''; jenisInput.value = ''; }
             }
             saveData();
@@ -317,27 +345,31 @@
             if(currentMode === 'kapal') {
                 headerRow.innerHTML = `<th class="p-3 border-b w-12 text-center">NO</th><th class="p-3 border-b">JAM</th><th class="p-3 border-b text-right pr-6">BERAT</th><th class="p-3 border-b w-20 text-center">AKSI</th>`;
                 if(recordsKapal.length === 0) tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400 text-xs">Belum ada data kapal.</td></tr>`;
-                else tbody.innerHTML = recordsKapal.map((r, i) => `
+                else tbody.innerHTML = recordsKapal.map((r, i) => {
+                    let syncIcon = r.synced ? '<i class="fas fa-check-circle text-green-500 text-[10px] ml-1" title="Tersinkronisasi"></i>' : '<i class="fas fa-cloud-upload-alt text-gray-300 text-[10px] ml-1" title="Belum disinkronisasi"></i>';
+                    return `
                     <tr class="border-b border-gray-100 ${i === 0 ? 'flash-row' : ''}">
-                        <td class="p-3 text-center font-bold text-gray-400 text-xs">${r.no}</td>
+                        <td class="p-3 text-center font-bold text-gray-400 text-xs">${r.no} ${syncIcon}</td>
                         <td class="p-3 text-xs text-gray-500">${r.time}</td>
                         <td class="p-3 font-mono font-bold text-base text-gray-800 text-right pr-6">${formatNum(r.weight)}</td>
                         <td class="p-2 text-center flex justify-center gap-1">
                             <button onclick="askEditKapal(${r.no}, ${r.weight})" class="text-blue-500 hover:bg-blue-50 p-2 rounded-lg"><i class="fas fa-edit"></i></button>
                             <button onclick="askDeleteKapal(${r.no})" class="text-red-400 hover:bg-red-50 p-2 rounded-lg"><i class="fas fa-trash-alt"></i></button>
                         </td>
-                    </tr>`).join('');
+                    </tr>`}).join('');
             } else {
                 headerRow.innerHTML = `<th class="p-3 border-b w-10 text-center">NO</th><th class="p-3 border-b">PEMILIK & JENIS</th><th class="p-3 border-b text-right pr-4">BERAT</th><th class="p-3 border-b w-16 text-center">AKSI</th>`;
                 if(recordsTitipan.length === 0) tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400 text-xs">Belum ada data ikan titipan.</td></tr>`;
                 else tbody.innerHTML = recordsTitipan.map((r, i) => {
-                    let jenis = r.jenis || 'Tuna'; 
+                    let safeJenis = escapeHTML(r.jenis) || 'Tuna';
+                    let safePemilik = escapeHTML(r.pemilik);
+                    let syncIcon = r.synced ? '<i class="fas fa-check-circle text-green-500 text-[10px] ml-1"></i>' : '<i class="fas fa-cloud-upload-alt text-gray-300 text-[10px] ml-1"></i>';
                     return `<tr class="border-b border-gray-100 ${i === 0 ? 'flash-row' : ''}">
-                        <td class="p-3 text-center font-bold text-gray-400 text-xs">${r.no}</td>
-                        <td class="p-3 font-bold text-gray-800 text-xs">${r.pemilik}<div class="text-[10px] text-gray-400 font-normal mt-0.5"><span class="text-amber-600 font-bold">${jenis}</span> • ${r.time}</div></td>
+                        <td class="p-3 text-center font-bold text-gray-400 text-xs">${r.no} ${syncIcon}</td>
+                        <td class="p-3 font-bold text-gray-800 text-xs">${safePemilik}<div class="text-[10px] text-gray-400 font-normal mt-0.5"><span class="text-amber-600 font-bold">${safeJenis}</span> • ${r.time}</div></td>
                         <td class="p-3 font-mono font-bold text-sm text-gray-800 text-right pr-4">${formatNum(r.weight)}</td>
                         <td class="p-2 text-center flex justify-center gap-1">
-                            <button onclick="askEditTitipan(${r.no}, '${r.pemilik}', '${jenis}', ${r.weight})" class="text-blue-500 hover:bg-blue-50 p-1.5 rounded-lg"><i class="fas fa-edit"></i></button>
+                            <button onclick="askEditTitipan(${r.no}, '${safePemilik}', '${safeJenis}', ${r.weight})" class="text-blue-500 hover:bg-blue-50 p-1.5 rounded-lg"><i class="fas fa-edit"></i></button>
                             <button onclick="askDeleteTitipan(${r.no})" class="text-red-400 hover:bg-red-50 p-1.5 rounded-lg"><i class="fas fa-trash-alt"></i></button>
                         </td>
                     </tr>`}).join('');
@@ -360,9 +392,11 @@
         let actionTarget = null;
         function askDeleteKapal(no) { actionTarget = no; document.getElementById('confirmTitle').innerText = 'Hapus Kapal'; document.getElementById('confirmText').innerText = `Hapus No.${no}?`; document.getElementById('confirmBtn').onclick = () => { recordsKapal = recordsKapal.filter(r => r.no !== actionTarget); saveData(); render(); closeModal('confirmModal'); }; openModal('confirmModal'); }
         function askDeleteTitipan(no) { actionTarget = no; document.getElementById('confirmTitle').innerText = 'Hapus Titipan'; document.getElementById('confirmText').innerText = `Hapus No.${no}?`; document.getElementById('confirmBtn').onclick = () => { recordsTitipan = recordsTitipan.filter(r => r.no !== actionTarget); saveData(); render(); closeModal('confirmModal'); }; openModal('confirmModal'); }
-        function askEditKapal(no, currentWeight) { actionTarget = no; document.getElementById('editNameContainer').classList.add('hidden'); const input = document.getElementById('editInputValue'); input.value = currentWeight; document.getElementById('saveEditBtn').onclick = () => { let newVal = parseFloat(input.value.replace(',', '.')); if(!isNaN(newVal) && newVal > 0) { let idx = recordsKapal.findIndex(r => r.no === actionTarget); if(idx !== -1) { recordsKapal[idx].weight = newVal; saveData(); render(); } } closeModal('editModal'); }; openModal('editModal'); setTimeout(() => input.focus(), 100); }
-        function askEditTitipan(no, currentPemilik, currentJenis, currentWeight) { actionTarget = no; document.getElementById('editNameContainer').classList.remove('hidden'); const p = document.getElementById('editPemilikValue'); const j = document.getElementById('editJenisValue'); const w = document.getElementById('editInputValue'); p.value = currentPemilik; j.value = currentJenis; w.value = currentWeight; document.getElementById('saveEditBtn').onclick = () => { let newVal = parseFloat(w.value.replace(',', '.')); if(!isNaN(newVal) && newVal > 0) { let idx = recordsTitipan.findIndex(r => r.no === actionTarget); if(idx !== -1) { recordsTitipan[idx].pemilik = p.value || 'KAPAL'; recordsTitipan[idx].jenis = j.value || 'Tuna'; recordsTitipan[idx].weight = newVal; saveData(); render(); } } closeModal('editModal'); }; openModal('editModal'); setTimeout(() => p.focus(), 100); }
-        function askClearData() { const name = currentMode === 'kapal' ? 'Data Kapal' : 'Data Titipan'; document.getElementById('confirmTitle').innerText = `Reset ${name}`; document.getElementById('confirmText').innerText = `Hapus SEMUA data?`; document.getElementById('confirmBtn').onclick = () => { if(currentMode === 'kapal') { recordsKapal = []; currentNoKapal = 1; } else { recordsTitipan = []; currentNoTitipan = 1; } saveData(); render(); closeModal('confirmModal'); }; openModal('confirmModal'); }
+        
+        function askEditKapal(no, currentWeight) { actionTarget = no; document.getElementById('editNameContainer').classList.add('hidden'); const input = document.getElementById('editInputValue'); input.value = currentWeight; document.getElementById('saveEditBtn').onclick = () => { let newVal = parseFloat(input.value.replace(',', '.')); if(!isNaN(newVal) && newVal > 0) { let idx = recordsKapal.findIndex(r => r.no === actionTarget); if(idx !== -1) { recordsKapal[idx].weight = newVal; recordsKapal[idx].synced = false; saveData(); render(); } } closeModal('editModal'); }; openModal('editModal'); setTimeout(() => input.focus(), 100); }
+        function askEditTitipan(no, currentPemilik, currentJenis, currentWeight) { actionTarget = no; document.getElementById('editNameContainer').classList.remove('hidden'); const p = document.getElementById('editPemilikValue'); const j = document.getElementById('editJenisValue'); const w = document.getElementById('editInputValue'); p.value = currentPemilik; j.value = currentJenis; w.value = currentWeight; document.getElementById('saveEditBtn').onclick = () => { let newVal = parseFloat(w.value.replace(',', '.')); if(!isNaN(newVal) && newVal > 0) { let idx = recordsTitipan.findIndex(r => r.no === actionTarget); if(idx !== -1) { recordsTitipan[idx].pemilik = p.value || 'KAPAL'; recordsTitipan[idx].jenis = j.value || 'Tuna'; recordsTitipan[idx].weight = newVal; recordsTitipan[idx].synced = false; saveData(); render(); } } closeModal('editModal'); }; openModal('editModal'); setTimeout(() => p.focus(), 100); }
+        
+        function askClearData() { const name = currentMode === 'kapal' ? 'Data Kapal' : 'Data Titipan'; document.getElementById('confirmTitle').innerText = `Reset ${name}`; document.getElementById('confirmText').innerText = `Hapus SEMUA data?`; document.getElementById('confirmBtn').onclick = () => { if(currentMode === 'kapal') { recordsKapal = []; currentNoKapal = 1; } else { recordsTitipan = []; currentNoTitipan = 1; } localStorage.removeItem('catattuna_sesi_id'); currentSesiId = null; saveData(); render(); closeModal('confirmModal'); }; openModal('confirmModal'); }
 
         function sendWA() {
             const ship = shipInput.value || '-';
