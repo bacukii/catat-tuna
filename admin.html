@@ -21,39 +21,53 @@
             <i class="fas fa-server text-xl text-blue-400"></i>
             <h1 class="text-lg font-bold tracking-wide">Data Center Tuna</h1>
         </div>
-        <a href="index.html" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-2 transition">
-            <i class="fas fa-arrow-left"></i> Kembali
-        </a>
+        <div class="flex gap-2">
+            <button id="btnLogout" onclick="logout()" class="hidden-panel bg-red-600 hover:bg-red-500 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-2 transition">
+                <i class="fas fa-sign-out-alt"></i> Keluar
+            </button>
+            <a href="index.html" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-2 transition">
+                <i class="fas fa-arrow-left"></i> App
+            </a>
+        </div>
     </header>
 
-    <!-- LAYAR 1: LOGIN TOKEN -->
+    <!-- LAYAR 1: LOGIN AUTH -->
     <div id="loginScreen" class="flex-1 flex items-center justify-center p-4">
-        <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm text-center border border-gray-100">
-            <i class="fas fa-lock text-4xl text-gray-300 mb-4"></i>
-            <h2 class="text-xl font-bold text-gray-800 mb-2">Akses Terkunci</h2>
-            <p class="text-xs text-gray-500 mb-5">Masukkan Token Admin untuk melihat database.</p>
-            <input type="password" id="tokenInput" placeholder="••••••••" class="w-full text-center text-2xl tracking-[0.5em] font-mono border-2 border-gray-200 rounded-lg p-3 mb-4 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition">
-            <button onclick="checkToken()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition active:scale-95">
-                Buka Akses
-            </button>
-            <p id="loginError" class="text-red-500 text-xs font-bold mt-3 hidden">Token salah!</p>
+        <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm border border-gray-100">
+            <div class="text-center mb-6">
+                <i class="fas fa-shield-alt text-4xl text-blue-500 mb-3"></i>
+                <h2 class="text-xl font-bold text-gray-800">Admin Login</h2>
+                <p class="text-xs text-gray-500 mt-1">Sistem Terenkripsi Supabase Auth</p>
+            </div>
+            
+            <form id="loginForm" onsubmit="handleLogin(event)" class="flex flex-col gap-4">
+                <div>
+                    <label class="text-xs font-bold text-gray-500">Email Admin</label>
+                    <input type="email" id="emailInput" required placeholder="admin@domain.com" class="w-full border-2 border-gray-200 rounded-lg p-3 mt-1 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-500">Password</label>
+                    <input type="password" id="passwordInput" required placeholder="••••••••" class="w-full border-2 border-gray-200 rounded-lg p-3 mt-1 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition">
+                </div>
+                <button type="submit" id="loginBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition active:scale-95 mt-2 flex justify-center items-center gap-2">
+                    Masuk
+                </button>
+                <p id="loginError" class="text-red-500 text-xs font-bold text-center hidden">Email atau Password salah!</p>
+            </form>
         </div>
     </div>
 
     <!-- LAYAR 2: DASHBOARD ADMIN -->
     <main id="adminScreen" class="hidden-panel flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-        
         <div class="bg-blue-100 border border-blue-200 p-3 rounded-lg flex justify-between items-center text-blue-800">
-            <span class="text-sm font-semibold"><i class="fas fa-wifi mr-2"></i>Status: Terhubung ke Supabase</span>
+            <span class="text-sm font-semibold"><i class="fas fa-wifi mr-2"></i>Status: Terhubung & Aman</span>
             <button onclick="loadSesiBongkar()" class="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold shadow hover:bg-blue-700"><i class="fas fa-sync-alt mr-1"></i> Refresh</button>
         </div>
 
         <h3 class="font-bold text-gray-700 text-sm mt-2 border-b-2 border-gray-300 pb-2">Riwayat Sesi Bongkar</h3>
         <div id="sesiList" class="flex flex-col gap-3 pb-10">
-            <!-- Data Sesi akan dirender di sini -->
             <div class="text-center py-10 text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Memuat data dari cloud...</div>
         </div>
-
     </main>
 
     <!-- Modal Detail Timbangan -->
@@ -69,7 +83,6 @@
                 </button>
             </div>
             
-            <!-- Summary Bar -->
             <div class="flex bg-blue-600 text-white p-3 text-xs justify-around font-bold">
                 <span>Total: <span id="sumEkor" class="text-blue-200">0</span> Ekor</span>
                 <span>Berat: <span id="sumBerat" class="text-blue-200">0</span> KG</span>
@@ -84,55 +97,83 @@
                             <th class="p-3 text-right">Berat (KG)</th>
                         </tr>
                     </thead>
-                    <tbody id="detailTableBody" class="text-sm divide-y divide-gray-100">
-                        <!-- Rincian akan dirender di sini -->
-                    </tbody>
+                    <tbody id="detailTableBody" class="text-sm divide-y divide-gray-100"></tbody>
                 </table>
             </div>
         </div>
     </div>
 
     <script>
-        // --- KONFIGURASI TOKEN ---
-        // Ganti dengan kombinasi rahasia milikmu atau bos-mu
-        const ADMIN_TOKEN = "BOS2026"; 
-
-        // --- Inisialisasi Supabase ---
+        // Inisialisasi Supabase
         const supabaseUrl = 'https://stydpkjwnuyjbccmgciq.supabase.co';
         const supabaseKey = 'sb_publishable_YdFXJ6Rsi_NFHz61HsM2Ow_pqz6R5XT';
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         const loginScreen = document.getElementById('loginScreen');
         const adminScreen = document.getElementById('adminScreen');
-        const tokenInput = document.getElementById('tokenInput');
+        const btnLogout = document.getElementById('btnLogout');
         const errorMsg = document.getElementById('loginError');
-
-        // Fitur submit token dengan tombol Enter
-        tokenInput.addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') checkToken();
-        });
-
-        function checkToken() {
-            if (tokenInput.value === ADMIN_TOKEN) {
-                loginScreen.classList.add('hidden-panel');
-                adminScreen.classList.remove('hidden-panel');
-                loadSesiBongkar();
-            } else {
-                errorMsg.classList.remove('hidden');
-                tokenInput.value = '';
-                setTimeout(() => errorMsg.classList.add('hidden'), 3000);
-            }
-        }
+        const loginBtn = document.getElementById('loginBtn');
 
         const formatNum = (num) => Number(num).toFixed(2);
         const escapeHTML = (str) => !str ? '' : str.toString().replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+
+        // Cek Sesi saat halaman dimuat
+        window.onload = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                showAdminPanel();
+            }
+        };
+
+        // Autentikasi Login
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            
+            loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+            loginBtn.disabled = true;
+            errorMsg.classList.add('hidden');
+
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+
+            loginBtn.innerHTML = 'Masuk';
+            loginBtn.disabled = false;
+
+            if (error) {
+                errorMsg.innerText = error.message.includes('Invalid login') ? 'Email atau Password salah!' : error.message;
+                errorMsg.classList.remove('hidden');
+            } else {
+                showAdminPanel();
+            }
+        }
+
+        // Proses Keluar
+        async function logout() {
+            await supabase.auth.signOut();
+            loginScreen.classList.remove('hidden-panel');
+            adminScreen.classList.add('hidden-panel');
+            btnLogout.classList.add('hidden-panel');
+            document.getElementById('loginForm').reset();
+        }
+
+        function showAdminPanel() {
+            loginScreen.classList.add('hidden-panel');
+            adminScreen.classList.remove('hidden-panel');
+            btnLogout.classList.remove('hidden-panel');
+            loadSesiBongkar();
+        }
 
         async function loadSesiBongkar() {
             const listContainer = document.getElementById('sesiList');
             listContainer.innerHTML = '<div class="text-center py-10 text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Mengambil data...</div>';
 
             try {
-                // Mengambil data sesi diurutkan dari yang terbaru
+                // Supabase akan otomatis melampirkan JWT token dari session untuk validasi RLS
                 const { data, error } = await supabase
                     .from('sesi_bongkar')
                     .select('*')
@@ -162,7 +203,13 @@
 
             } catch (err) {
                 console.error(err);
-                listContainer.innerHTML = '<div class="bg-red-50 p-4 rounded-lg text-red-500 text-sm text-center border border-red-200">Gagal memuat data. Periksa koneksi internet.</div>';
+                if (err.code === 'PGRST301') {
+                    // Jika RLS menolak akses karena sesi kadaluarsa
+                    logout();
+                    alert('Sesi login telah berakhir. Silakan login kembali.');
+                } else {
+                    listContainer.innerHTML = '<div class="bg-red-50 p-4 rounded-lg text-red-500 text-sm text-center border border-red-200">Gagal memuat data. Periksa koneksi internet.</div>';
+                }
             }
         }
 
@@ -178,7 +225,6 @@
             modal.classList.add('flex');
 
             try {
-                // Mengambil rincian timbangan berdasarkan sesi_id
                 const { data, error } = await supabase
                     .from('detail_timbangan')
                     .select('*')
@@ -198,24 +244,16 @@
                 
                 tbody.innerHTML = data.map(r => {
                     totalBerat += r.berat_kg;
-                    let infoHtml = '';
-                    
-                    if (r.mode === 'kapal') {
-                        infoHtml = `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold">KAPAL</span> <span class="text-gray-400 ml-1">${r.jam}</span>`;
-                    } else {
-                        infoHtml = `
-                            <span class="font-bold text-gray-800">${escapeHTML(r.pemilik)}</span>
-                            <div class="text-[10px] text-gray-500 mt-0.5"><span class="text-amber-600 font-bold">${escapeHTML(r.jenis_ikan)}</span> • ${r.jam}</div>
-                        `;
-                    }
+                    let infoHtml = r.mode === 'kapal' 
+                        ? `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold">KAPAL</span> <span class="text-gray-400 ml-1">${r.jam}</span>` 
+                        : `<span class="font-bold text-gray-800">${escapeHTML(r.pemilik)}</span><div class="text-[10px] text-gray-500 mt-0.5"><span class="text-amber-600 font-bold">${escapeHTML(r.jenis_ikan)}</span> • ${r.jam}</div>`;
 
                     return `
                     <tr>
                         <td class="p-3 text-center font-bold text-gray-400 text-xs border-r">${r.no_urut}</td>
                         <td class="p-3 text-xs">${infoHtml}</td>
                         <td class="p-3 font-mono font-bold text-sm text-gray-800 text-right">${formatNum(r.berat_kg)}</td>
-                    </tr>
-                    `;
+                    </tr>`;
                 }).join('');
 
                 document.getElementById('sumEkor').innerText = data.length;
@@ -228,11 +266,9 @@
         }
 
         function closeDetail() {
-            const modal = document.getElementById('detailModal');
-            modal.classList.add('hidden-panel');
-            modal.classList.remove('flex');
+            document.getElementById('detailModal').classList.add('hidden-panel');
+            document.getElementById('detailModal').classList.remove('flex');
         }
     </script>
 </body>
 </html>
-

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'catat-tuna-v15';
+const CACHE_NAME = 'catat-tuna-v16';
 
 const ASSETS_TO_CACHE = [
   './',
