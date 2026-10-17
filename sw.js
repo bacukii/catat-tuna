@@ -1,4 +1,4 @@
-const CACHE_NAME = 'catat-tuna-v5'; // Naikkan versi cache
+const CACHE_NAME = 'catat-tuna-v12'; // Naikkan versi cache
 
 const ASSETS_TO_CACHE = [
   './',
